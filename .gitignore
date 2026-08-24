@@ -1,0 +1,21 @@
+﻿# Local artifacts that must never be committed
+_manifests/
+*-manifest.txt
+*.idindex.json
+mail/
+out/
+*.zip
+!packs/*.zip
+_ingest/staging/
+_ingest/manifests/
+_ingest/prompts/
+__pycache__/
+*.pyc
+# never publish content or access data from this repo
+wikis/
+packs/
+pack/
+*-manifest.json
+*-manifest.txt
+*.idindex.json
+mail/

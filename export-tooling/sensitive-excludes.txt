@@ -1,0 +1,29 @@
+# Always excluded from any export, regardless of the recipient's access.
+# Matched as case-insensitive substrings against each note's source path.
+# Access is not the only test: personal data stays out even when the recipient
+# could technically open the original document.
+
+# Email layer: private by default, never exported.
+\mail\
+mail-thread
+visibility: private
+
+# Personnel, hiring, compensation
+02 People and Culture
+01 Hiring
+Comp Benchmarking
+Work Test
+Candidate Interview Notes
+CANDIDATE -
+Performance Review
+Payroll
+Offer Letter
+
+# Donor and prospect wealth profiling
+Prospect_Research
+Prospect Research
+Wealth Screen
+
+# ADD YOUR OWN: name specific files or people here as you find them, for example
+# a candidate assessment filed outside the hiring folders, or a donor profile.
+# Keep this file OUT of any public repository once it contains real names.

@@ -1,0 +1,30 @@
+# Media
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+# Archives / disk images / executables
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.iso
+*.dmg
+*.exe
+*.msi
+# System junk
+desktop.ini
+Thumbs.db
+.DS_Store
+# Protect locally generated markdown conversions from being deleted by sync
+*.docx.md
+*.pptx.md
+*.xlsx.md
+*.pdf.md

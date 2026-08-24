@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hivemind — your team's knowledge, in one place</title>
+<meta name="description" content="Turn your team's Google Drive into a searchable, linked knowledge base, scoped automatically to what each person is allowed to see.">
+<style>
+  :root{
+    --bg:#fff; --card:#fff; --ink:#0d0d0f; --soft:#6a6660; --line:#e6e2db;
+    --mesh:#0d0d0f; --mesh-soft:#b9b6b1;
+    --accent:#0d0d0f; --accent-soft:#f2f1ef; --ok:#0f6e56; --ok-bg:#f0f7f4;
+    --warn:#8a3a10; --warn-bg:#faf3ee; --radius:10px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0c0c0e;--card:#131316;--ink:#f0efec;--soft:#9b9791;--line:#2a2a30;
+      --mesh:#f0efec;--mesh-soft:#4a4a54;
+      --accent:#f0efec;--accent-soft:#1c1c21;--ok:#7fd4b4;--ok-bg:#11201b;
+      --warn:#e9a877;--warn-bg:#241a13;}
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif}
+  .wrap{max-width:940px;margin:0 auto;padding:0 1.4rem}
+
+  /* hero with plexus backdrop */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .hero .mesh{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+    opacity:.32}
+  /* keep the hero readable: the mesh is texture, never competes with the words */
+  .hero .inner h1,.hero .inner .sub,.hero .inner .pill{position:relative;z-index:1}
+  .hero .inner .sub{background:var(--bg);padding:.15rem .4rem;border-radius:6px;display:inline-block}
+  .hero .inner{position:relative;padding:5.5rem 0 4rem;text-align:center}
+  h1{font-size:clamp(2.1rem,5.4vw,3.2rem);line-height:1.1;margin:0 0 1rem;letter-spacing:-.025em}
+  .sub{font-size:clamp(1.02rem,2.3vw,1.2rem);color:var(--soft);max-width:40ch;margin:0 auto}
+  .pill{display:inline-block;font:600 .72rem/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+    border:1px solid var(--ink);padding:.42rem .85rem;border-radius:99px;margin-bottom:1.5rem}
+
+  section{padding:3rem 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:0}
+  h2{font-size:1.55rem;margin:0 0 .5rem;letter-spacing:-.015em}
+  .lede{color:var(--soft);margin:0 0 1.7rem;max-width:60ch}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:1.3rem 1.4rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem}
+  .grid h3{font-size:1rem;margin:0 0 .35rem}
+  .grid p{margin:0;color:var(--soft);font-size:.93rem}
+
+  .stage{border:1px solid var(--line);border-radius:var(--radius);padding:1.4rem 1.3rem 1rem;
+    margin-bottom:1.1rem;background:var(--card)}
+  .stagehead{display:flex;align-items:baseline;gap:.75rem;margin:0}
+  .num{font:600 .74rem/1 var(--mono);letter-spacing:.06em;border:1px solid var(--ink);
+    padding:.32rem .48rem;border-radius:4px}
+  .stagehead h3{font-size:1.06rem;margin:0;letter-spacing:-.01em}
+  .stagesub{color:var(--soft);font-size:.92rem;margin:.4rem 0 .9rem}
+  svg{display:block;width:100%;height:auto}
+
+  /* plexus primitives */
+  .edge{stroke:var(--mesh);stroke-width:.8;fill:none;opacity:.55}
+  .edge-soft{stroke:var(--mesh-soft);stroke-width:.7;fill:none;opacity:.75}
+  .node{fill:var(--mesh)}
+  .node-soft{fill:var(--mesh-soft)}
+  .lbl{fill:var(--soft);font-size:11px;font-family:var(--mono);letter-spacing:.04em}
+
+  /* animation */
+  .travel{animation:travel 4.2s ease-in-out infinite}
+  @keyframes travel{0%{opacity:0;transform:translateX(0)}
+    12%{opacity:1}62%{opacity:1;transform:translateX(232px)}80%,100%{opacity:0;transform:translateX(232px)}}
+  .t2{animation-delay:.5s}.t3{animation-delay:1s}.t4{animation-delay:1.5s}.t5{animation-delay:2s}
+  .blink{animation:blink 2.8s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:.18}45%{opacity:1}}
+  .b2{animation-delay:.28s}.b3{animation-delay:.56s}.b4{animation-delay:.84s}
+  .b5{animation-delay:1.12s}.b6{animation-delay:1.4s}.b7{animation-delay:1.68s}
+  .grow{stroke-dasharray:300;stroke-dashoffset:300;animation:grow 5s ease-out infinite}
+  @keyframes grow{0%{stroke-dashoffset:300}45%,100%{stroke-dashoffset:0}}
+  .g2{animation-delay:.35s}.g3{animation-delay:.7s}.g4{animation-delay:1.05s}
+  .g5{animation-delay:1.4s}.g6{animation-delay:1.75s}.g7{animation-delay:2.1s}
+  .pop{opacity:0;animation:pop 5s ease-out infinite}
+  @keyframes pop{0%,35%{opacity:0}55%,100%{opacity:1}}
+  .p2{animation-delay:.4s}.p3{animation-delay:.8s}
+  .drift{animation:drift 14s ease-in-out infinite alternate}
+  @keyframes drift{from{transform:translate(0,0)}to{transform:translate(-14px,10px)}}
+  @media (prefers-reduced-motion:reduce){
+    .travel,.blink,.grow,.pop,.drift{animation:none}
+    .travel,.pop{opacity:1}.grow{stroke-dashoffset:0}.blink{opacity:.9}
+  }
+
+  .prompt{position:relative;background:#0b0d10;color:#e8edf4;border-radius:var(--radius);
+    padding:1.3rem 1.35rem;font:13.5px/1.75 var(--mono);white-space:pre-wrap;word-break:break-word;
+    border:1px solid #23272e}
+  .copy{position:absolute;top:.7rem;right:.7rem;background:#1a1e24;color:#e8edf4;border:1px solid #2f353d;
+    border-radius:6px;padding:.35rem .8rem;font:inherit;font-size:.78rem;cursor:pointer}
+  .copy:hover{background:#242a32}
+  .steps{counter-reset:s;padding:0;list-style:none;margin:1.4rem 0 0}
+  .steps li{counter-increment:s;position:relative;padding:0 0 1rem 2.5rem}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:.05rem;width:1.7rem;height:1.7rem;
+    border:1px solid var(--ink);border-radius:99px;font:600 .78rem/1.6rem var(--mono);text-align:center}
+  .note{background:var(--ok-bg);border:1px solid var(--ok);color:var(--ok);
+    border-radius:var(--radius);padding:1rem 1.15rem;margin-top:1.2rem}
+  .caution{background:var(--warn-bg);border:1px solid var(--warn);color:var(--warn);
+    border-radius:var(--radius);padding:1rem 1.15rem;margin-top:1rem}
+  footer{padding:2.5rem 0 4rem;color:var(--soft);font-size:.88rem;border-top:1px solid var(--line)}
+  a{color:var(--ink)}
+  .btnrow{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.2rem}
+  .btn{display:inline-block;border:1px solid var(--ink);border-radius:6px;padding:.55rem 1.05rem;
+    text-decoration:none;font-size:.9rem}
+  .btn:hover{background:var(--accent-soft)}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g class="drift">
+      <g class="edge-soft">
+        <path d="M60 40 L190 110 L120 250 L60 40 M190 110 L330 60 L300 200 L120 250 M330 60 L470 130 L300 200
+                 M470 130 L610 70 L560 210 L300 200 M610 70 L750 120 L560 210 M750 120 L890 60 L860 200 L560 210
+                 M890 60 L1030 120 L860 200 M1030 120 L1150 50 L1120 190 L860 200"/>
+        <path d="M120 250 L200 380 L340 340 L300 200 M340 340 L470 390 L560 210 M470 390 L640 360 L560 210
+                 M640 360 L790 400 L860 200 M790 400 L950 350 L860 200 M950 350 L1100 380 L1120 190"/>
+      </g>
+      <g class="edge">
+        <path d="M190 110 L300 200 L560 210 L860 200 L1120 190"/>
+        <path d="M300 200 L340 340 M560 210 L640 360 M860 200 L950 350"/>
+      </g>
+      <g class="node-soft">
+        <circle cx="60" cy="40" r="3"/><circle cx="330" cy="60" r="3"/><circle cx="610" cy="70" r="3"/>
+        <circle cx="890" cy="60" r="3"/><circle cx="1150" cy="50" r="3"/><circle cx="200" cy="380" r="3"/>
+        <circle cx="470" cy="390" r="3"/><circle cx="790" cy="400" r="3"/><circle cx="1100" cy="380" r="3"/>
+        <circle cx="470" cy="130" r="2.5"/><circle cx="750" cy="120" r="2.5"/><circle cx="1030" cy="120" r="2.5"/>
+      </g>
+      <g class="node">
+        <circle cx="190" cy="110" r="4.5"/><circle cx="120" cy="250" r="4"/><circle cx="300" cy="200" r="6"/>
+        <circle cx="560" cy="210" r="6.5"/><circle cx="860" cy="200" r="6"/><circle cx="1120" cy="190" r="4.5"/>
+        <circle cx="340" cy="340" r="4"/><circle cx="640" cy="360" r="4"/><circle cx="950" cy="350" r="4"/>
+      </g>
+    </g>
+  </svg>
+  <div class="wrap"><div class="inner">
+    <span class="pill">Hivemind</span>
+    <h1>Your team's knowledge,<br>actually usable.</h1>
+    <p class="sub">Turn the team's Google Drive into a searchable, linked knowledge base that
+      Claude can read in full, scoped automatically to what each person is allowed to see.</p>
+    <div class="btnrow" style="justify-content:center">
+      <a class="btn" href="#start">Get started</a>
+      <a class="btn" href="#how">See how it works</a>
+    </div>
+  </div></div>
+</div>
+
+<div class="wrap">
+
+<section>
+  <h2>The problem</h2>
+  <p class="lede">Everything the team knows is scattered across hundreds of documents. Asking an
+    AI assistant to search Drive gets you one keyword query at a time and a few snippets. Nobody
+    has read all of it, and nobody ever will.</p>
+  <div class="grid">
+    <div class="card"><h3>Read once, reuse forever</h3>
+      <p>The tool reads every document once and writes short, linked notes. That reading is the
+      expensive part, and it happens a single time for the whole team.</p></div>
+    <div class="card"><h3>Everything cites its source</h3>
+      <p>Every claim points back to the document it came from. Nothing is invented, and
+      disagreements between documents are flagged rather than smoothed over.</p></div>
+    <div class="card"><h3>Nobody sees more than they should</h3>
+      <p>When a teammate installs it, it checks their own Google permissions and keeps only what
+      they can already open.</p></div>
+  </div>
+</section>
+
+<section id="how">
+  <h2>How the knowledge gets built</h2>
+  <p class="lede">Four steps. The first three happen once, on the team lead's machine.</p>
+
+  <div class="stage">
+    <div class="stagehead"><span class="num">01</span><h3>Copy the Drive</h3></div>
+    <p class="stagesub">Every document becomes a plain text file on the computer. Read-only:
+      nothing in Drive is ever changed.</p>
+    <svg viewBox="0 0 640 190" role="img" aria-label="Loose, unconnected documents copied one by one from Google Drive to your computer">
+      <g class="edge-soft" stroke-dasharray="4 5" opacity=".45">
+        <rect x="34" y="28" width="150" height="118" rx="10"/>
+        <rect x="456" y="28" width="150" height="118" rx="10"/>
+      </g>
+      <!-- step 1 is a copy, not a graph: the documents are still loose and unrelated -->
+      <g class="node">
+        <circle cx="70" cy="55" r="4.5"/><circle cx="118" cy="44" r="4"/><circle cx="158" cy="66" r="4.5"/>
+        <circle cx="62" cy="98" r="4"/><circle cx="105" cy="88" r="5"/><circle cx="152" cy="108" r="4"/>
+        <circle cx="80" cy="130" r="4.5"/><circle cx="130" cy="126" r="4"/>
+      </g>
+      <g class="node">
+        <circle cx="492" cy="55" r="4.5"/><circle cx="540" cy="44" r="4"/><circle cx="580" cy="66" r="4.5"/>
+        <circle cx="484" cy="98" r="4"/><circle cx="527" cy="88" r="5"/><circle cx="574" cy="108" r="4"/>
+        <circle cx="502" cy="130" r="4.5"/><circle cx="552" cy="126" r="4"/>
+      </g>
+      <g class="node">
+        <circle class="travel" cx="205" cy="60" r="4.5"/>
+        <circle class="travel t2" cx="205" cy="92" r="5"/>
+        <circle class="travel t3" cx="205" cy="120" r="4"/>
+        <circle class="travel t4" cx="205" cy="76" r="3.5"/>
+        <circle class="travel t5" cx="205" cy="105" r="4.5"/>
+      </g>
+      <text class="lbl" x="109" y="172" text-anchor="middle">GOOGLE DRIVE</text>
+      <text class="lbl" x="531" y="172" text-anchor="middle">YOUR COMPUTER</text>
+      <text class="lbl" x="320" y="172" text-anchor="middle" opacity=".7">COPIED, NOT YET CONNECTED</text>
+    </svg>
+  </div>
+
+  <div class="stage">
+    <div class="stagehead"><span class="num">02</span><h3>Read everything, all at once</h3></div>
+    <p class="stagesub">Hundreds of readers work in parallel, one document each, turning it into a
+      handful of short notes. Meeting invitations and logistics get skipped.</p>
+    <svg viewBox="0 0 640 200" role="img" aria-label="Many readers working simultaneously, each turning one document into several notes">
+      <g class="edge-soft">
+        <path d="M90 100 L200 35 M90 100 L200 68 M90 100 L200 100 M90 100 L200 132 M90 100 L200 165"/>
+        <path d="M200 35 L300 22 M200 35 L300 48 M200 68 L300 60 M200 68 L300 84
+                 M200 100 L300 96 M200 100 L300 118 M200 132 L300 130 M200 132 L300 152
+                 M200 165 L300 162 M200 165 L300 182"/>
+      </g>
+      <g class="node"><circle cx="90" cy="100" r="7"/></g>
+      <g class="node">
+        <circle class="blink" cx="200" cy="35" r="5"/>
+        <circle class="blink b2" cx="200" cy="68" r="5"/>
+        <circle class="blink b3" cx="200" cy="100" r="5"/>
+        <circle class="blink b4" cx="200" cy="132" r="5"/>
+        <circle class="blink b5" cx="200" cy="165" r="5"/>
+      </g>
+      <g class="node-soft">
+        <circle class="blink" cx="300" cy="22" r="3"/><circle class="blink" cx="300" cy="48" r="3"/>
+        <circle class="blink b2" cx="300" cy="60" r="3"/><circle class="blink b2" cx="300" cy="84" r="3"/>
+        <circle class="blink b3" cx="300" cy="96" r="3"/><circle class="blink b3" cx="300" cy="118" r="3"/>
+        <circle class="blink b4" cx="300" cy="130" r="3"/><circle class="blink b4" cx="300" cy="152" r="3"/>
+        <circle class="blink b5" cx="300" cy="162" r="3"/><circle class="blink b5" cx="300" cy="182" r="3"/>
+      </g>
+      <text class="lbl" x="90" y="130" text-anchor="middle">DOCS</text>
+      <text class="lbl" x="205" y="196" text-anchor="middle">ONE READER PER DOCUMENT</text>
+      <text class="lbl" x="400" y="100">SHORT NOTES</text>
+    </svg>
+  </div>
+
+  <div class="stage">
+    <div class="stagehead"><span class="num">03</span><h3>Connect the notes</h3></div>
+    <p class="stagesub">One librarian files every note, merges the duplicates, and links what
+      belongs together. This is what turns a pile of notes into knowledge.</p>
+    <svg viewBox="0 0 640 220" role="img" aria-label="Notes connecting into a dense linked network">
+      <g class="edge">
+        <path class="grow" d="M110 60 L215 40"/><path class="grow g2" d="M215 40 L330 75"/>
+        <path class="grow g3" d="M330 75 L455 45"/><path class="grow g4" d="M455 45 L560 90"/>
+        <path class="grow g2" d="M110 60 L160 145"/><path class="grow g3" d="M160 145 L280 165"/>
+        <path class="grow g4" d="M280 165 L330 75"/><path class="grow g5" d="M280 165 L400 180"/>
+        <path class="grow g5" d="M400 180 L455 45"/><path class="grow g6" d="M400 180 L520 165"/>
+        <path class="grow g6" d="M520 165 L560 90"/><path class="grow g7" d="M215 40 L330 75"/>
+        <path class="grow g7" d="M160 145 L215 40"/>
+      </g>
+      <g class="edge-soft">
+        <path class="grow g5" d="M110 60 L280 165"/><path class="grow g6" d="M330 75 L520 165"/>
+        <path class="grow g7" d="M215 40 L455 45"/>
+      </g>
+      <g class="node">
+        <circle cx="110" cy="60" r="5.5"/><circle cx="215" cy="40" r="6.5"/><circle cx="330" cy="75" r="8"/>
+        <circle cx="455" cy="45" r="6"/><circle cx="560" cy="90" r="5.5"/><circle cx="160" cy="145" r="5"/>
+        <circle cx="280" cy="165" r="7"/><circle cx="400" cy="180" r="6"/><circle cx="520" cy="165" r="5"/>
+      </g>
+      <text class="lbl" x="320" y="212" text-anchor="middle">EVERY NOTE LINKED TO WHAT IT RELATES TO</text>
+    </svg>
+  </div>
+
+  <div class="stage">
+    <div class="stagehead"><span class="num">04</span><h3>Everyone gets their own copy</h3></div>
+    <p class="stagesub">Each teammate installs it and signs in. The tool checks what they can open
+      in Drive and keeps only that. It then updates itself every night.</p>
+    <svg viewBox="0 0 640 210" role="img" aria-label="One shared bundle producing a differently sized network for each teammate">
+      <g class="edge">
+        <path d="M60 105 L110 60 L155 105 L110 150 L60 105 M60 105 L155 105 M110 60 L110 150"/>
+      </g>
+      <g class="node">
+        <circle cx="60" cy="105" r="5"/><circle cx="110" cy="60" r="5"/><circle cx="155" cy="105" r="6.5"/>
+        <circle cx="110" cy="150" r="5"/><circle cx="110" cy="105" r="4"/>
+      </g>
+      <text class="lbl" x="107" y="180" text-anchor="middle">ONE BUNDLE</text>
+      <g class="edge-soft">
+        <path d="M170 100 L300 45 M170 105 L300 105 M170 110 L300 165" stroke-dasharray="3 5"/>
+      </g>
+      <g class="pop">
+        <g class="edge"><path d="M320 30 L370 18 L415 45 L360 62 L320 30 M370 18 L360 62 M320 30 L415 45"/></g>
+        <g class="node"><circle cx="320" cy="30" r="4"/><circle cx="370" cy="18" r="4.5"/>
+          <circle cx="415" cy="45" r="4"/><circle cx="360" cy="62" r="4"/></g>
+        <text class="lbl" x="450" y="42">SEES MOST</text>
+      </g>
+      <g class="pop p2">
+        <g class="edge"><path d="M320 92 L370 82 L400 112 L320 92 M370 82 L360 118"/></g>
+        <g class="node"><circle cx="320" cy="92" r="4"/><circle cx="370" cy="82" r="4.5"/>
+          <circle cx="400" cy="112" r="4"/><circle cx="360" cy="118" r="3.5"/></g>
+        <text class="lbl" x="450" y="102">SEES SOME</text>
+      </g>
+      <g class="pop p3">
+        <g class="edge"><path d="M325 155 L375 148 L355 182 L325 155"/></g>
+        <g class="node"><circle cx="325" cy="155" r="4"/><circle cx="375" cy="148" r="4"/>
+          <circle cx="355" cy="182" r="4"/></g>
+        <text class="lbl" x="450" y="164">SEES THEIR SLICE</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section id="start">
+  <h2>Start it with one paste</h2>
+  <p class="lede">Open Claude Code in a terminal, paste this, and it will do the rest: fetch the
+    tool, install what it needs, and open your browser to sign in to Google.</p>
+
+  <div class="prompt"><button class="copy" onclick="copyPrompt()">Copy</button><span id="promptText">Set up Hivemind Team Vault for me on this machine.
+
+1. Clone https://github.com/jamesbedford-beep/hivemind_super_badass_repo into my Documents folder.
+2. Make sure Python 3.10+ and rclone are installed (install rclone with winget if it is missing).
+3. Start the Team Vault app: run teamvault/server.py, pointing the vault at Documents/TeamVault.
+4. When my browser opens, walk me through connecting my Google account (read-only) and picking which drives my team's context comes from.
+
+Explain each step in plain language as you go, and stop and ask me before anything that costs money or touches Drive.</span></div>
+
+  <ol class="steps">
+    <li><strong>Paste it into Claude Code.</strong> It clones the tool and checks what your machine needs.</li>
+    <li><strong>Sign in to Google.</strong> A browser tab opens. Access is read-only, and the token stays on your computer.</li>
+    <li><strong>Pick your team's drives</strong> and let it scan. It suggests the documents worth including, with a reason for each.</li>
+    <li><strong>Review and build.</strong> You see the cost before anything is spent, and anything personal is held back automatically.</li>
+    <li><strong>Share one bundle.</strong> Everyone installs it and gets their own correctly-scoped copy.</li>
+  </ol>
+
+  <div class="note"><strong>Nothing leaves your computer.</strong> The Drive copy, the notes and the
+    sign-in token all stay local. The tool never uploads your documents anywhere.</div>
+
+  <div class="caution"><strong>Personal material is held back by default.</strong> Performance reviews,
+    compensation, hiring and candidate files and donor profiles are excluded even when the person
+    installing could open them in Drive. Access is not the only test.</div>
+</section>
+
+<section>
+  <h2>Questions people ask</h2>
+  <div class="grid">
+    <div class="card"><h3>Do I need to be technical?</h3>
+      <p>No. One paste into Claude Code, one Google sign-in, and a few clicks in a browser.</p></div>
+    <div class="card"><h3>Will it show me things I should not see?</h3>
+      <p>No. Your copy is built from your own Drive permissions, checked file by file.</p></div>
+    <div class="card"><h3>Does it go stale?</h3>
+      <p>It syncs each night and adds anything new you can see, so it stays current on its own.</p></div>
+    <div class="card"><h3>What does it cost?</h3>
+      <p>The reading is the only real cost, and the team lead pays it once. Installing is free.</p></div>
+  </div>
+</section>
+
+</div>
+
+<footer><div class="wrap">
+  Hivemind · for teams who keep their knowledge in Google Drive.
+  The repository is private, so ask your team lead for access before running the setup prompt.
+</div></footer>
+
+<script>
+function copyPrompt(){
+  const t = document.getElementById('promptText').innerText;
+  navigator.clipboard.writeText(t).then(()=>{
+    const b = document.querySelector('.copy');
+    b.textContent = 'Copied'; setTimeout(()=>b.textContent = 'Copy', 1600);
+  });
+}
+</script>
+</body>
+</html>

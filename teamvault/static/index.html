@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team Vault</title>
+<style>
+  :root{
+    --bg:#faf9f7; --card:#fff; --ink:#1b1a18; --soft:#6b6862; --line:#e3e0da;
+    --accent:#1f6feb; --accent-soft:#eaf1fe; --warn:#a3410f; --warn-bg:#fdf1e8;
+    --ok:#0f6e56; --ok-bg:#e6f4ef; --radius:8px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#17161a;--card:#1f1e23;--ink:#ecebe8;--soft:#a3a09a;--line:#33313a;
+      --accent:#6ea8fe;--accent-soft:#1d2740;--warn:#f0a878;--warn-bg:#2e2118;
+      --ok:#7fd4b4;--ok-bg:#14261f;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{padding:1.1rem 1.5rem;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:1rem;background:var(--card)}
+  header h1{font-size:1.05rem;font-weight:600;margin:0}
+  header .vault{color:var(--soft);font-size:.82rem;margin-left:auto}
+  nav{display:flex;gap:.3rem;padding:.7rem 1.5rem;border-bottom:1px solid var(--line);
+    background:var(--card);overflow-x:auto}
+  nav button{border:1px solid transparent;background:none;color:var(--soft);
+    padding:.4rem .8rem;border-radius:99px;cursor:pointer;font-size:.85rem;white-space:nowrap}
+  nav button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+  nav button:disabled{opacity:.4;cursor:not-allowed}
+  main{padding:1.5rem;max-width:1180px;margin:0 auto}
+  .step{display:none} .step.on{display:block}
+  h2{font-size:1.15rem;margin:0 0 .3rem}
+  .lede{color:var(--soft);margin:0 0 1.1rem;max-width:62ch}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:1.1rem 1.2rem;margin-bottom:1rem}
+  button.primary{background:var(--accent);color:#fff;border:0;padding:.55rem 1.1rem;
+    border-radius:6px;cursor:pointer;font-size:.9rem}
+  button.primary:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ink);
+    padding:.45rem .9rem;border-radius:6px;cursor:pointer;font-size:.85rem}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .list{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:6px}
+  .row{display:flex;gap:.6rem;align-items:flex-start;padding:.5rem .7rem;
+    border-bottom:1px solid var(--line);font-size:.85rem}
+  .row:last-child{border-bottom:0}
+  .row .why{color:var(--soft);font-size:.76rem}
+  .row .nm{font-weight:500;word-break:break-word}
+  .row .pth{color:var(--soft);font-size:.72rem;word-break:break-all}
+  .badge{font-size:.68rem;padding:.1rem .45rem;border-radius:99px;
+    background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+  .warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:.9rem 1rem;margin-bottom:1rem}
+  .ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok);
+    border-radius:var(--radius);padding:.9rem 1rem}
+  .stat{display:flex;gap:2rem;flex-wrap:wrap;margin:.6rem 0}
+  .stat div span{display:block;font-size:1.35rem;font-weight:600}
+  .stat div small{color:var(--soft)}
+  input[type=text]{width:100%;padding:.5rem .7rem;border:1px solid var(--line);
+    border-radius:6px;background:var(--bg);color:var(--ink);font-size:.88rem}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.8rem;
+    font-size:.78rem;max-height:40vh;overflow:auto;white-space:pre-wrap}
+  .muted{color:var(--soft);font-size:.82rem}
+  label.chk{display:flex;gap:.5rem;align-items:center;padding:.35rem 0;font-size:.87rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Team Vault</h1>
+  <span class="vault" id="vaultPath"></span>
+</header>
+<nav>
+  <button data-s="0" class="on">1 · Connect</button>
+  <button data-s="1">2 · Curate</button>
+  <button data-s="2">3 · Review</button>
+  <button data-s="3">4 · Build</button>
+  <button data-s="4">5 · Ship</button>
+</nav>
+<main>
+
+<section class="step on" id="s0">
+  <h2>Connect a Google account</h2>
+  <p class="lede">Read-only access. Consent runs through rclone, which opens your browser
+    and stores the token locally. Nothing is uploaded, and this tool ships no credentials.</p>
+  <div class="card">
+    <div id="remoteList" class="muted">checking…</div>
+    <div style="margin-top:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+      <input type="text" id="remoteName" placeholder="remote name, e.g. gdrive" style="max-width:240px">
+      <button class="primary" id="btnConnect">Connect with Google</button>
+      <span class="muted" id="connectMsg"></span>
+    </div>
+  </div>
+  <div class="card">
+    <strong>Scopes</strong>
+    <p class="muted">Which drives is this team's context drawn from?</p>
+    <div id="drives" class="muted">connect first</div>
+    <button class="primary" id="btnScan" style="margin-top:.8rem" disabled>Scan selected scopes</button>
+    <span class="muted" id="scanMsg"></span>
+  </div>
+</section>
+
+<section class="step" id="s1">
+  <h2>Curate the team's context</h2>
+  <p class="lede">Ranked suggestions on the left, each with the reason it surfaced.
+    Add what your team needs. You can only see what your own account can open, so a
+    teammate may have access to things that never appear here.</p>
+  <div class="cols">
+    <div class="card">
+      <strong>Suggestions</strong> <span class="muted" id="sugCount"></span>
+      <div style="margin:.5rem 0"><input type="text" id="filter" placeholder="filter by name or folder"></div>
+      <div class="list" id="sugList"></div>
+      <div style="margin-top:.6rem;display:flex;gap:.5rem">
+        <button class="ghost" id="btnTop25">Add top 25</button>
+        <button class="ghost" id="btnAddSel">Add checked</button>
+      </div>
+    </div>
+    <div class="card">
+      <strong>In the vault</strong> <span class="muted" id="vaultCount"></span>
+      <div class="list" id="vaultList" style="margin-top:.5rem"></div>
+      <div style="margin-top:.6rem"><button class="ghost" id="btnRmSel">Remove checked</button></div>
+    </div>
+  </div>
+</section>
+
+<section class="step" id="s2">
+  <h2>Review before spending anything</h2>
+  <p class="lede">Cost, exclusions and what each teammate will actually receive.</p>
+  <div class="card">
+    <div class="stat" id="estStat"></div>
+    <p class="muted">Estimate extrapolated from a reference run of ~700 documents.
+      Treat it as an order of magnitude, not a quote.</p>
+  </div>
+  <div id="sensBox"></div>
+  <div class="card">
+    <strong>Access preview</strong>
+    <p class="muted">Emails, comma separated. Samples up to 60 documents per person
+      and checks each one's real Drive permissions.</p>
+    <input type="text" id="emails" placeholder="teammate@example.org, other@example.org">
+    <button class="primary" id="btnPreview" style="margin-top:.7rem">Check access</button>
+    <div id="previewOut" style="margin-top:.8rem"></div>
+  </div>
+</section>
+
+<section class="step" id="s3">
+  <h2>Build</h2>
+  <p class="lede">Mirrors the selected scopes, then distils and links. This is the
+    expensive step and you pay it once for the whole team.</p>
+  <div class="card">
+    <button class="primary" id="btnBuild">Start build</button>
+    <span class="muted" id="buildMsg"></span>
+    <pre id="buildLog" style="margin-top:.8rem">not started</pre>
+  </div>
+</section>
+
+<section class="step" id="s4">
+  <h2>Ship to the team</h2>
+  <p class="lede">One bundle. Each teammate installs it, signs into their own Google
+    account, and receives only the notes whose sources they can already open.</p>
+  <div class="card">
+    <button class="primary" id="btnShip">Create bundle</button>
+    <div id="shipOut" style="margin-top:.8rem"></div>
+  </div>
+</section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
