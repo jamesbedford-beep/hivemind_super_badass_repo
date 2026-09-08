@@ -12,8 +12,8 @@ Tested against both two different vault shapes.
 
 The vaults differ in where their notes come from, so granting works differently:
 
-- **the organisation vault**: notes derive from shared drives (`01_Interventions`,
-  `02_External Affairs`, `00_Operations`). Access is decided by **shared-drive
+- **the organisation vault**: notes derive from shared drives (`01_Programmes`,
+  `02_External`, `00_Ops`). Access is decided by **shared-drive
   membership**, so `--drives` is the right lever and one flag covers thousands of
   files.
 - **Personal-Drive vault**: notes derive from **My Drive** and **Shared with me**. There is
@@ -28,8 +28,8 @@ Dry run first, always (reports what would ship, writes nothing):
 
 ```
 python export.py --vault "C:\Users\you\Documents\MyVault" ^
-                 --out "C:\Users\you\Documents\exports\sarah" ^
-                 --drives "01_Interventions,02 External Affairs" ^
+                 --out "C:\Users\you\Documents\exports\teammate" ^
+                 --drives "01_Programmes,02 External" ^
                  --dry-run
 ```
 
@@ -37,7 +37,7 @@ Real run, per-file access (the personal-Drive case):
 
 ```
 python export.py --vault "C:\Users\you\Documents\SecondVault" ^
-                 --out "C:\Users\you\Documents\exports\sarah" ^
+                 --out "C:\Users\you\Documents\exports\teammate" ^
                  --list recipient-files.txt --loose
 ```
 
@@ -59,7 +59,7 @@ token (no new credentials):
 
 ```
 .\access_manifest.ps1 -Vault "C:\Users\you\Documents\MyVault" `
-                      -Email katie@example.org -Remote gdrive -Out katie-manifest.txt
+                      -Email second.person@example.org -Remote gdrive -Out person-manifest.txt
 ```
 
 It reports per shared drive whether that person is a member, writes a manifest of
@@ -69,7 +69,7 @@ wiki notes that covers. Feed the manifest straight to `export.py --list`.
 **It verifies every file individually, not just drive membership.** This matters:
 folders inside a shared drive carry their own permissions, so a drive member can
 be blocked from a subfolder, and non-members can hold access to single folders.
-Observed on the real corpus: one teammate is a member of `01_Interventions` yet
+Observed on the real corpus: one teammate is a member of `01_Programmes` yet
 cannot open the 8 documents in its `Fund Scoping` folder. Membership alone would
 have shipped distillations of restricted fundraising material. Files whose
 permissions cannot be resolved are excluded rather than assumed.
@@ -84,7 +84,7 @@ so use it only for a rough estimate, never for a pack you intend to send.
 Without an email you can skip the API entirely and just assert membership:
 
 ```
-python access_manifest.py --vault "...\MyVault" --member-of "01_Interventions,02 External Affairs"
+python access_manifest.py --vault "...\MyVault" --member-of "01_Programmes,02 External"
 ```
 
 **Always use the .ps1 wrapper on Windows with Microsoft Store Python.** Store

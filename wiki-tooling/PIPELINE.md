@@ -32,6 +32,19 @@ Batch-ingests the Drive mirror into the wiki. Based on the community
    conversion siblings). Hash each. Refresh ledger.
 2. **Triage every file into tiers** (the corpus is not clean):
    - `ingest`: substantive strategy/scoping/evidence/decision docs
+
+### Provenance (applies to every phase)
+
+The team manifest records, per document: `modified`, `author`, `starred`,
+`audience`, `version` and `genre`. Copy these into each note's frontmatter as
+`source_modified`, `source_author`, `audience`, `genre` and `authority`. Do not
+infer them from the text, and leave a field out rather than guessing.
+
+They exist so the linking phase can apply the precedence order in
+WIKI-CONVENTIONS.md instead of escalating every disagreement to a human. A note
+without `source_modified` cannot take part in superseding, so it is worth
+stamping even when the value looks uninteresting.
+
    - `summarize-only`: transcripts and very large files (>300 KB): produce ONE
      source summary note each, read in chunks, no full atomization
    - `skip`: DEPRECATED_* files, trivial files (<2 KB), scraps, duplicate

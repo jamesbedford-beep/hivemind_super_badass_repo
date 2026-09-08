@@ -26,12 +26,35 @@ import suggest
 STATE = {
     "vault": None,
     "remote": "gdrive",
+    "mode": "drive",          # drive | folder | local
+    "source_label": "",
+    "account": {},            # {remote: email}, so we ask Google only once
     "files": [],
     "sizes": {},
     "manifest": None,
     "build": {"running": False, "log": [], "done": False, "error": None},
 }
 HERE = Path(__file__).resolve().parent
+
+
+def resolve_remote(preferred=None):
+    """The account to use, preferring what was asked for.
+
+    The default is a placeholder name that often does not exist locally. Rather
+    than failing on it, fall back to the configured account when there is only
+    one, which is the usual case.
+    """
+    have = core.list_remotes()
+    for candidate in (preferred, STATE.get("remote")):
+        if candidate and candidate in have:
+            return candidate
+    if len(have) == 1:
+        return have[0]
+    if not have:
+        raise RuntimeError(
+            "No Google account is set up yet. Use Connect with Google first.")
+    raise RuntimeError(
+        f"Pick which account to use. Found: {', '.join(have)}")
 
 
 def manifest_path():
@@ -50,43 +73,108 @@ def api_state(_):
     STATE["manifest"] = m
     return {"vault": STATE["vault"], "remote": STATE["remote"],
             "remotes": core.list_remotes(), "manifest": m,
+            "mode": STATE["mode"], "source_label": STATE["source_label"],
             "scanned": len(STATE["files"]), "build": STATE["build"]}
 
 
 def api_connect(body):
-    remote = body.get("remote") or STATE["remote"]
+    # a fresh connection gets a name of our choosing: the person signing in has
+    # no reason to invent one, and 'gdrive' collides with existing setups
+    remote = (body.get("remote") or "").strip()
+    if not remote:
+        existing = set(core.list_remotes())
+        remote = "hivemind"
+        n = 2
+        while remote in existing:
+            remote = f"hivemind{n}"
+            n += 1
     core.connect(remote)
-    STATE["remote"] = remote
-    return {"ok": remote in core.list_remotes(), "remotes": core.list_remotes()}
+    ok = remote in core.list_remotes()
+    if ok:
+        STATE["remote"] = remote
+        STATE["account"].pop(remote, None)
+    return {"ok": ok, "remote": remote, "email": signed_in_as(remote) if ok else "",
+            "remotes": core.list_remotes()}
 
 
 def api_drives(body):
-    STATE["remote"] = body.get("remote") or STATE["remote"]
+    STATE["remote"] = resolve_remote(body.get("remote"))
     token = core.access_token(STATE["remote"])
     drives = core.shared_drives(token)
     return {"drives": drives + [{"id": None, "name": "My Drive"}]}
 
 
+def collect_files(mode, body):
+    """The candidate documents for the chosen source. Returns (files, label).
+
+    'drive' walks whole drives, 'folder' stays inside one Drive folder, and
+    'local' never contacts Google at all.
+    """
+    if mode == "local":
+        path = (body.get("path") or "").strip()
+        if not path:
+            raise RuntimeError("Give the folder on this computer to read.")
+        files = core.list_local_files(path)
+        if not files:
+            raise RuntimeError(f"No readable documents found in {path}")
+        return files, str(Path(path).expanduser())
+
+    if mode == "folder":
+        fid = core.folder_id_from_url(body.get("folder_url"))
+        token = core.access_token(STATE["remote"])
+        meta = core.folder_meta(token, fid)
+        files = core.list_folder_files(STATE["remote"], fid, token)
+        if not files:
+            raise RuntimeError(
+                f"'{meta.get('name')}' has no documents in it, or none you can open.")
+        return files, meta.get("name") or fid
+
+    scopes = body.get("scopes") or []
+    if not scopes:
+        raise RuntimeError("Pick at least one drive to scan.")
+    files, seen = [], set()
+    for s in scopes:
+        for f in core.list_files(STATE["remote"], s.get("id"), s.get("name", "")):
+            # the same document can surface in more than one scope, most often
+            # via 'Shared with me' alongside the shared drive it really lives in
+            if f["path"] in seen:
+                continue
+            seen.add(f["path"])
+            files.append(f)
+    return files, ", ".join(s.get("name", "") for s in scopes)
+
+
 def api_scan(body):
     # accept the remote explicitly so a scan cannot silently use a stale default
-    STATE["remote"] = body.get("remote") or STATE["remote"]
-    scopes = body.get("scopes") or []
-    files = []
-    for s in scopes:
-        files += core.list_files(STATE["remote"], s.get("id"), s.get("name", ""))
+    mode = body.get("mode") or "drive"
+    if mode != "local":
+        STATE["remote"] = resolve_remote(body.get("remote"))
+    if mode not in ("drive", "folder", "local"):
+        raise RuntimeError(f"unknown source '{mode}'")
+    files, label = collect_files(mode, body)
+    STATE["mode"], STATE["source_label"] = mode, label
     STATE["files"] = files
-    STATE["sizes"] = {f["path"]: f["size"] for f in files}
+    # accumulate rather than replace: a manifest can span more than one scan,
+    # and a document whose size is forgotten silently shrinks the estimate
+    STATE["sizes"].update({f["path"]: f["size"] for f in files})
     m = STATE["manifest"] or load_or_new()
-    m["scopes"] = [s.get("name") for s in scopes]
+    m["scopes"] = [label]
+    m["source_mode"] = mode
     STATE["manifest"] = m
     wiki = Path(STATE["vault"]) / "wiki"
-    ranked, blocked = suggest.rank(files, wiki_dir=str(wiki) if wiki.is_dir() else None, limit=400)
-    return {"total": len(files), "suggestions": ranked[:200], "blocked": blocked[:100]}
+    ranked, blocked = suggest.rank(files, wiki_dir=str(wiki) if wiki.is_dir() else None,
+                                   limit=400, priority_authors=m.get("priority_authors", []))
+    return {"total": len(files), "suggestions": ranked[:200], "blocked": blocked[:100],
+            "mode": mode, "label": label, "authors": core.owners_of(files)}
 
 
 def api_add(body):
     m = STATE["manifest"]
-    added = [p for p in body.get("paths", []) if M.add(m, p, body.get("reason", "manual"))]
+    src = "local" if STATE["mode"] == "local" else "drive"
+    meta_by_path = {f["path"]: f for f in STATE["files"]}
+    added = [p for p in body.get("paths", [])
+             if M.add(m, p, body.get("reason", "manual"), source=src,
+                      meta=meta_by_path.get(p))]
     M.save(m, manifest_path())
     return {"added": len(added), "count": len(m["documents"]), "excluded": len(m["excluded"])}
 
@@ -101,19 +189,36 @@ def api_remove(body):
 
 def api_review(body):
     m = STATE["manifest"]
-    est = M.estimate(m, STATE["sizes"])
+    est = M.estimate(m, STATE["sizes"], vault=STATE["vault"])
     preview = []
     emails = [e.strip() for e in body.get("emails", []) if e.strip()]
-    if emails and STATE["files"]:
-        token = core.access_token(STATE["remote"])
-        idx = {f["path"]: f["id"] for f in STATE["files"]}
-        sample = [d["path"] for d in m["documents"]][:60]
-        for e in emails:
-            dom = e.split("@")[-1].lower()
-            yes = sum(1 for p in sample if idx.get(p) and core.can_access(token, idx[p], e, dom))
-            pct = round(100 * yes / len(sample)) if sample else 0
-            preview.append({"email": e, "sample": len(sample), "accessible": yes, "pct": pct})
-    return {"estimate": est, "excluded": m["excluded"][:50], "access_preview": preview}
+    # only Drive-backed documents have permissions to sample; local ones would
+    # otherwise drag every percentage down and imply a check that never ran
+    checkable = [d["path"] for d in m["documents"] if d.get("source") != "local"]
+    idx = {f["path"]: f["id"] for f in STATE["files"] if f.get("id")}
+    sample = [p for p in checkable if idx.get(p)][:60]
+    note = ""
+    if emails and not checkable:
+        note = "Nothing to check: every document came from a folder, not from Drive."
+    elif emails and not sample:
+        note = ("Nothing to check against yet. Scan the Drive these documents came "
+                "from and the preview can look up their permissions.")
+    elif emails:
+        # a broken or unconfigured remote should cost the preview, not the
+        # whole review screen
+        try:
+            token = core.access_token(STATE["remote"])
+            for e in emails:
+                dom = e.split("@")[-1].lower()
+                yes = sum(1 for p in sample if core.can_access(token, idx[p], e, dom))
+                preview.append({"email": e, "sample": len(sample), "accessible": yes,
+                                "pct": round(100 * yes / len(sample))})
+        except Exception as exc:
+            note = "Could not check access: " + str(exc)
+    return {"estimate": est, "excluded": m["excluded"][:50], "access_preview": preview,
+            "preview_note": note,
+            "unverifiable": [d["path"] for d in M.unverifiable(m)][:50],
+            "mode": m.get("source_mode", "drive")}
 
 
 def _build_worker(vault):
@@ -157,6 +262,50 @@ def api_build_status(_):
     return STATE["build"]
 
 
+RECIPIENT_README = """# Start here
+
+You have been sent your team's shared knowledge base. Setting it up takes about
+five minutes and installs only the notes you are already allowed to see.
+
+## What you need
+
+- Python 3.10 or newer
+- rclone (`winget install Rclone.Rclone` on Windows)
+
+## Install
+
+From this folder, run:
+
+    python install.py
+
+It opens your browser so you can sign in to your own Google account. The access
+is read-only: nothing here can change anything in Drive.
+
+It then checks, document by document, which of the team's sources you can open,
+and installs only the notes built entirely from those. Notes you are not
+entitled to are discarded before anything is written to disk, and any link
+pointing at one of them is turned into plain text so you never see a dead end.
+
+## What you get
+
+A `wiki` folder of short, cross-linked notes. Open it as an Obsidian vault, or
+point an AI assistant at the folder and ask it questions.
+
+## Keeping it current
+
+`install.py` prints a `sync.ps1` command at the end. Run it to mirror Drive
+yourself so your copy stays up to date. That step also needs markitdown
+(`pip install markitdown[all]`) to read Office and PDF files.
+
+## Notes
+
+- Re-run `python install.py` any time. It refreshes what you can see and
+  removes anything you no longer have access to.
+- If it ends with an error about unresolved links, send the output to whoever
+  built the bundle rather than using the vault.
+"""
+
+
 def api_ship(body):
     vault = Path(STATE["vault"])
     out = vault / "TeamVault-Setup"
@@ -178,6 +327,7 @@ def api_ship(body):
         src = HERE.parent / "pipeline" / name
         if src.exists():
             shutil.copy2(src, out / name)
+    (out / "START-HERE.md").write_text(RECIPIENT_README, encoding="utf-8")
     zip_path = shutil.make_archive(str(vault / "TeamVault-Setup"), "zip", str(out))
     notes = len(list((out / "wiki").rglob("*.md")))
     msg = ("Download TeamVault-Setup.zip, unzip it, and run:  python install.py\n"
@@ -186,7 +336,99 @@ def api_ship(body):
     return {"bundle": zip_path, "notes": notes, "message": msg}
 
 
+def api_authority(body):
+    """Mark documents authoritative, normal, or superseded."""
+    m = STATE["manifest"]
+    level = body.get("level", "normal")
+    n = sum(1 for p in body.get("paths", []) if M.set_authority(m, p, level))
+    M.save(m, manifest_path())
+    return {"updated": n, "level": level}
+
+
+def signed_in_as(remote):
+    """The email behind a connection, cached: it never changes for a remote."""
+    if remote in STATE["account"]:
+        return STATE["account"][remote]
+    try:
+        token = core.access_token(remote)
+        email = core.api_get(token, "about", fields="user(emailAddress)")
+        email = email["user"]["emailAddress"]
+    except Exception:
+        email = ""
+    STATE["account"][remote] = email
+    return email
+
+
+def api_whoami(_):
+    """Which Google account the tool is using, in the words a person uses."""
+    remotes = core.list_remotes()
+    if not remotes:
+        return {"connected": False, "accounts": []}
+    try:
+        current = resolve_remote()
+    except RuntimeError:
+        current = remotes[0]
+    return {"connected": True, "remote": current, "email": signed_in_as(current),
+            "accounts": [{"remote": r, "email": signed_in_as(r)} for r in remotes]}
+
+
+def api_authors(_):
+    """Document owners from the last scan, so the picker has real people in it."""
+    m = STATE["manifest"] or load_or_new()
+    known = core.owners_of(STATE["files"])
+    # anyone already chosen stays selectable even if they own nothing in this scan
+    have = {a["email"] for a in known}
+    for e in m.get("priority_authors", []):
+        if e.lower() not in have:
+            known.append({"email": e.lower(), "name": core.display_name(e), "count": 0})
+    return {"authors": known, "selected": m.get("priority_authors", [])}
+
+
+def api_settings(body):
+    """Read or update the manifest's own settings. Empty body just reads."""
+    m = STATE["manifest"]
+    if "priority_authors" in body:
+        m["priority_authors"] = [a.strip() for a in body["priority_authors"] if a.strip()]
+        M.save(m, manifest_path())
+        # the ranking depends on this, so re-rank what is already on screen
+        if STATE["files"]:
+            wiki = Path(STATE["vault"]) / "wiki"
+            ranked, blocked = suggest.rank(
+                STATE["files"], wiki_dir=str(wiki) if wiki.is_dir() else None,
+                limit=400, priority_authors=m["priority_authors"])
+            return {"priority_authors": m["priority_authors"],
+                    "suggestions": ranked[:200], "blocked": blocked[:100]}
+    return {"priority_authors": m.get("priority_authors", [])}
+
+
+def api_check_source(body):
+    """Validate a source and say how much is there, without ranking anything."""
+    mode = body.get("mode") or "drive"
+    if mode == "local":
+        path = (body.get("path") or "").strip()
+        files = core.list_local_files(path)
+        total = sum(f["size"] for f in files)
+        return {"ok": True, "count": len(files), "mb": round(total / (1024 * 1024), 1),
+                "label": str(Path(path).expanduser())}
+    if mode == "folder":
+        fid = core.folder_id_from_url(body.get("folder_url"))
+        remote = resolve_remote(body.get("remote"))
+        token = core.access_token(remote)
+        meta = core.folder_meta(token, fid)
+        # a check that succeeded is the best evidence of the right account, so
+        # keep it rather than letting the scan fall back to the default
+        STATE["remote"] = remote
+        return {"ok": True, "label": meta.get("name"), "id": fid,
+                "remote": remote, "shared_drive": bool(meta.get("driveId"))}
+    return {"ok": True}
+
+
 ROUTES = {
+    "/api/check_source": api_check_source,
+    "/api/authority": api_authority,
+    "/api/authors": api_authors,
+    "/api/whoami": api_whoami,
+    "/api/settings": api_settings,
     "/api/state": api_state, "/api/connect": api_connect, "/api/drives": api_drives,
     "/api/scan": api_scan, "/api/add": api_add, "/api/remove": api_remove,
     "/api/review": api_review, "/api/build": api_build,

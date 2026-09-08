@@ -50,8 +50,17 @@ foreach ($d in $drives) {
 
 # Drop 'Shared with me' copies that duplicate shared-drive content
 python (Join-Path $pipeline "dedupe.py") $dest | Out-File $log -Append -Encoding utf8
+if ($LASTEXITCODE -ne 0) {
+    "FATAL: dedupe.py failed (exit $LASTEXITCODE). See $log" | Tee-Object -FilePath $log -Append
+    exit 1
+}
 
 # Convert docx/pptx/xlsx/pdf to markdown siblings
 python (Join-Path $pipeline "convert.py") $dest | Out-File $log -Append -Encoding utf8
+if ($LASTEXITCODE -ne 0) {
+    "FATAL: convert.py failed (exit $LASTEXITCODE). Office and PDF files were NOT converted. See $log" |
+        Tee-Object -FilePath $log -Append
+    exit 1
+}
 
 "=== Sync finished $(Get-Date -Format o) ===" | Out-File $log -Append -Encoding utf8

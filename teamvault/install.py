@@ -64,57 +64,73 @@ def main():
     man = M.load(man_file)
     print(f"Team Vault: {man.get('team') or 'team'} manifest, {len(man['documents'])} documents\n")
 
-    # 1. Consent, read-only, in the person's own browser.
-    if a.remote not in core.list_remotes():
-        print("Opening your browser to sign in to Google (read-only access)...")
-        core.connect(a.remote)
-    token = core.access_token(a.remote)
+    # Documents taken from a folder rather than from Drive have no sharing
+    # permissions attached, so there is nothing to check a person against. They
+    # are in the bundle because whoever built it decided the whole team should
+    # have them, and they install for everyone.
+    drive_docs = [d for d in man["documents"] if d.get("source") != "local"]
+    local_docs = [d for d in man["documents"] if d.get("source") == "local"]
 
-    email = a.email
-    if not email:
-        try:
-            about = core.api_get(token, "about", fields="user(emailAddress)")
-            email = about["user"]["emailAddress"]
-        except Exception:
-            sys.exit("Could not detect your account. Re-run with --email you@example.org")
-    domain = email.split("@")[-1].lower()
-    print(f"signed in as {email}\n")
+    allowed = set(norm(Path(d["path"]).name) for d in local_docs)
 
-    # 2. Which manifest documents can this person actually open?
-    print("checking your access to the team's documents...")
-    drives = core.shared_drives(token)
-    index = {}
-    for d in drives + [{"id": None, "name": "My Drive"}]:
-        try:
-            for f in core.list_files(a.remote, d["id"], d["name"]):
-                index[norm(f["name"])] = f["id"]
-        except Exception:
-            continue
+    if drive_docs:
+        # 1. Consent, read-only, in the person's own browser.
+        if a.remote not in core.list_remotes():
+            print("Opening your browser to sign in to Google (read-only access)...")
+            core.connect(a.remote)
+        token = core.access_token(a.remote)
 
-    wanted = [Path(d["path"]).name for d in man["documents"]]
-    ids = {w: index.get(norm(w)) for w in wanted}
+        email = a.email
+        if not email:
+            try:
+                about = core.api_get(token, "about", fields="user(emailAddress)")
+                email = about["user"]["emailAddress"]
+            except Exception:
+                sys.exit("Could not detect your account. Re-run with --email you@example.org")
+        domain = email.split("@")[-1].lower()
+        print(f"signed in as {email}\n")
 
-    def check(w):
-        fid = ids.get(w)
-        if not fid:
-            return w, None
-        return w, core.can_access(token, fid, email, domain)
+        # 2. Which manifest documents can this person actually open?
+        print("checking your access to the team's documents...")
+        drives = core.shared_drives(token)
+        index = {}
+        for d in drives + [{"id": None, "name": "My Drive"}]:
+            try:
+                for f in core.list_files(a.remote, d["id"], d["name"]):
+                    index[norm(f["name"])] = f["id"]
+            except Exception:
+                continue
 
-    allowed = set()
-    unknown = 0
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for w, ok in ex.map(check, wanted):
-            if ok is True:
-                allowed.add(norm(w))
-            elif ok is None:
-                unknown += 1
-    print(f"  accessible: {len(allowed)} of {len(wanted)}")
-    print(f"  not accessible or unresolved: {len(wanted) - len(allowed)} (excluded to be safe)\n")
+        wanted = [Path(d["path"]).name for d in drive_docs]
+        ids = {w: index.get(norm(w)) for w in wanted}
+
+        def check(w):
+            fid = ids.get(w)
+            if not fid:
+                return w, None
+            return w, core.can_access(token, fid, email, domain)
+
+        ok_count = 0
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for w, ok in ex.map(check, wanted):
+                if ok is True:
+                    allowed.add(norm(w))
+                    ok_count += 1
+        print(f"  accessible: {ok_count} of {len(wanted)}")
+        print(f"  not accessible or unresolved: {len(wanted) - ok_count} (excluded to be safe)")
+    else:
+        print("This bundle was built from a folder rather than from Google Drive,")
+        print("so there are no permissions to check and no sign-in is needed.")
+
+    if local_docs:
+        print(f"  shared with everyone: {len(local_docs)} "
+              f"(from a folder, so there are no sharing settings to match)")
+    print()
 
     # 3. Keep only notes whose every source is accessible.
     vault = Path(a.vault)
     (vault / "wiki").mkdir(parents=True, exist_ok=True)
-    kept, dropped = {}, 0
+    kept, dropped, sourceless = {}, 0, 0
     for sub in ("concepts", "entities", "sources"):
         src = bundle_wiki / sub
         if not src.is_dir():
@@ -122,7 +138,13 @@ def main():
         for p in src.glob("*.md"):
             text = p.read_text(encoding="utf-8", errors="replace")
             srcs = note_sources(text)
-            if srcs and all(norm(s) in allowed for s in srcs):
+            if not srcs:
+                # a note that names no source cannot be access-checked, so it
+                # is withheld; counted separately because it is not an access
+                # decision and a run full of these means malformed frontmatter
+                sourceless += 1
+                dropped += 1
+            elif all(norm(s) in allowed for s in srcs):
                 kept[p.stem] = (sub, p, text)
             else:
                 dropped += 1
@@ -151,6 +173,21 @@ def main():
             (vault / "wiki" / extra).write_text(
                 LINK.sub(fix, s.read_text(encoding="utf-8", errors="replace")), encoding="utf-8")
 
+    # 4b. Remove notes a previous install left behind. Without this, revoking
+    # someone's access to a document does not take the notes off their disk:
+    # they simply stop being refreshed. Only the three folders this installer
+    # writes are touched, so nothing the person made themselves is at risk.
+    here = {(sub, stem) for stem, (sub, _p, _t) in kept.items()}
+    removed = 0
+    for sub in ("concepts", "entities", "sources"):
+        d = vault / "wiki" / sub
+        if not d.is_dir():
+            continue
+        for p in d.glob("*.md"):
+            if (sub, p.stem) not in here:
+                p.unlink()
+                removed += 1
+
     # 5. Install the tooling so their copy keeps itself current.
     (vault / "_pipeline").mkdir(exist_ok=True)
     for name in ("sync.ps1", "convert.py", "dedupe.py", "excludes.txt"):
@@ -168,8 +205,21 @@ def main():
 
     print(f"installed {len(kept)} notes to {vault / 'wiki'}")
     print(f"  withheld (outside your access): {dropped}")
+    if sourceless:
+        print(f"    of which named no source:    {sourceless}")
+    if removed:
+        print(f"  removed (no longer permitted): {removed}")
     print(f"  links converted to plain text:  {scrubbed}")
     print(f"  unresolved links (must be 0):   {len(unresolved)}")
+    if unresolved:
+        # the whole safety claim rests on this being zero, so it is an error,
+        # not a line of output to scroll past
+        print("\nERROR: some links still point at notes you did not receive:")
+        for t in sorted(unresolved)[:10]:
+            print("  - " + t)
+        print("Nothing further was installed. Please send this output to whoever "
+              "built the bundle.")
+        sys.exit(1)
     print("\nNext:")
     print(f"  1. Open {vault} as an Obsidian vault, or point an AI assistant at it.")
     print(f"  2. To keep it current, set up your Drive mirror:")

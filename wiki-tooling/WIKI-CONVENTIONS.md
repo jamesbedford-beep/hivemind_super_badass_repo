@@ -30,15 +30,30 @@ versioned in git (repo root = this folder). Batch ingestion follows
 type: atomic          # atomic | moc | source-archive
 title: <human-readable title>
 uid: <stable-kebab-slug>
-created: <YYYY-MM-DD>
+created: <YYYY-MM-DD>    # when THIS NOTE was written
 modified: <YYYY-MM-DD>   # bump on any edit, including link weaves
 source:                  # provenance: original drive/ path(s) this note draws from
   - <../drive/...>
+source_modified: <YYYY-MM-DD>   # when the SOURCE DOCUMENT last changed
+source_author: <email or name>  # who owns the source document
+authority: normal        # authoritative | normal | superseded
+audience: unknown        # internal | external | unknown
+genre: document          # document | ai-notes
+supersedes: []           # uids this note replaces
+superseded_by: <uid>     # set when a later note replaces this one
 aliases: []              # synonyms; used for link resolution and dedupe
 tags: []
 status: clean            # clean | conflict
 ---
 ```
+
+`created` and `source_modified` are different dates and are often years apart.
+`created` says when the note was written; `source_modified` says how old the
+underlying claim is. Precedence always uses `source_modified`.
+
+The provenance fields come from the team manifest, which records them per
+document at selection time. Copy them across rather than inferring them, and
+leave a field out entirely rather than guessing at it.
 
 ## Atomicity (grain rule)
 
@@ -66,9 +81,44 @@ If a note grows past ~150 lines, split it.
   BOTEC) wherever the source distinguishes it. Flag low-confidence numbers.
 - Contradictions are flagged, never silently resolved: set `status: conflict` on
   both notes and insert a `> [!warning] Conflict` callout naming both claims and
-  sources. A human resolves.
+  sources. A human resolves. The precedence rules below are the ONLY exceptions,
+  and each one requires the two sources to be versions of the same document.
 - American spelling. No em-dashes anywhere. Percentages as %, large figures as
   $XM / $XB. Metric units.
+
+## Precedence: which source wins
+
+Not every disagreement is a genuine conflict. Most are the same document at two
+points in time. Apply these in order, and stop at the first that fits.
+
+1. **Same document, later version.** If two sources are recognisably the same
+   document (same title stem, or one names the other) and one is later by
+   `source_modified` or version marker, the later one wins. Write the claim from
+   the newer source, add the older note's uid to `supersedes`, set
+   `superseded_by` on the older note, and keep the older note rather than
+   deleting it. Do NOT set `status: conflict`. Say so in one line:
+   `> Updated by <newer source> on <date>; the earlier figure was <x>.`
+
+2. **A human's notes over a machine transcript.** Where `genre: ai-notes`
+   disagrees with a document, follow the document and cite the transcript only
+   for colour. Never let a transcript overturn a written decision.
+
+3. **Internal over external.** An `audience: external` copy is usually a
+   simplified version of an internal document. On matters of fact, follow the
+   internal one and note the external framing if it differs materially.
+
+4. **Authoritative sources settle ties.** If one source is `authority:
+   authoritative` and the other is not, follow it and record the other as a
+   dissenting view in the same note, naming who holds it. This is a tie-break
+   between comparable sources, never a licence to drop the disagreement.
+
+5. **Everything else is a real conflict.** Two current documents, comparable
+   standing, incompatible claims: flag it as above and let a human decide. When
+   in doubt, this rule applies. Escalating is cheap; a wrong silent merge is not.
+
+Never apply precedence across genuinely different subjects, and never use it to
+resolve a disagreement about evidence, where both findings should stand with
+their methods and dates recorded.
 
 ## Bookkeeping
 

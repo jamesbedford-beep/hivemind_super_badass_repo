@@ -31,8 +31,17 @@ cd teamvault
 python server.py --vault "$env:USERPROFILE\Documents\TeamVault"
 ```
 
-That starts a local web app and opens your browser. Requires Python 3.10+ and
-rclone (`winget install Rclone.Rclone`). Nothing is uploaded anywhere.
+That starts a local web app and opens your browser. Nothing is uploaded anywhere.
+
+Prerequisites:
+
+- Python 3.10+
+- rclone: `winget install Rclone.Rclone`
+- markitdown, for reading Office and PDF files: `pip install markitdown[all]`
+
+Someone who has been *sent* a bundle does not need this repository at all. They
+unzip it and run `python install.py`; `START-HERE.md` inside the zip explains
+the rest.
 
 ## Repository map
 

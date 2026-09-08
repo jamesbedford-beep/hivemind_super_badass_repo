@@ -93,9 +93,9 @@ One file, versioned, human-readable:
   "team": "Strat-Init",
   "created": "2026-08-14",
   "created_by": "lead@example.org",
-  "scopes": ["01_Interventions", "02 External Affairs"],
+  "scopes": ["01_Programmes", "02 External"],
   "documents": [
-    { "path": "01_Interventions/.../Scoping Doc.md",
+    { "path": "01_Programmes/.../Scoping Doc.md",
       "added_by": "suggestion:referenced-by-14",
       "tags": ["strategy", "health"] }
   ],

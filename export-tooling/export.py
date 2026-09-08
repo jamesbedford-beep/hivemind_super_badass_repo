@@ -14,8 +14,8 @@ only test; personal data stays out.
 
 Usage:
   python export.py --vault "C:\\Users\\me\\Documents\\MyVault" ^
-                   --out "C:\\Users\\me\\Documents\\exports\\sarah" ^
-                   --drives "01_Interventions,02_External Affairs" ^
+                   --out "C:\\Users\\me\\Documents\\exports\\teammate" ^
+                   --drives "01_Programmes,02_External" ^
                    [--list recipient-files.txt] [--loose] [--dry-run]
 
   --drives  comma-separated shared drives the recipient is a member of. Grants

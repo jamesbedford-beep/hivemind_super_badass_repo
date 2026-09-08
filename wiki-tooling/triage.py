@@ -15,7 +15,16 @@ SIZE_SKIP = 2 * 1024          # < 2 KB: scraps
 SIZE_SUMMARIZE = 300 * 1024   # > 300 KB: transcripts / oversized
 
 SKIP_NAME = re.compile(r"deprecated|running agenda|\bagenda\b|scheduling", re.I)
-SUMMARIZE_NAME = re.compile(r"transcript|interview|syncs?\b|meeting notes", re.I)
+# Machine-written meeting records: verbose, repetitive, low signal per token.
+# One summary each is the right treatment.
+AI_NOTES_NAME = re.compile(
+    r"transcript|otter(?:\.ai)?|fireflies|granola|read\.?ai|tl;?dv|"
+    r"auto[-_ ]?notes|\brecording\b|gemini notes|copilot notes", re.I)
+
+# Notes and interviews a person wrote are primary material and must NOT be
+# swept up with the above. Sharing one rule quietly demoted 60 human-authored
+# files for every 6 machine transcripts it caught.
+HUMAN_RECORD_NAME = re.compile(r"meeting notes|interview|1[:_-]?1|syncs?\b|debrief", re.I)
 
 
 def tier_for(path: Path, size: int) -> tuple[str, str]:
@@ -26,10 +35,13 @@ def tier_for(path: Path, size: int) -> tuple[str, str]:
         return "skip", "logistics/deprecated name"
     if name.lower().endswith(".xlsx.md"):
         return "skip", "spreadsheet conversion (tables, no prose)"
-    if SUMMARIZE_NAME.search(name):
-        return "summarize-only", "transcript/meeting-style name"
+    if AI_NOTES_NAME.search(name):
+        return "summarize-only", "machine-generated transcript"
     if size > SIZE_SUMMARIZE:
         return "summarize-only", f"oversized ({size // 1024} KB)"
+    if HUMAN_RECORD_NAME.search(name):
+        # stated outright so the report shows this was a deliberate keep
+        return "ingest", "human notes or interview: primary material"
     return "ingest", ""
 
 

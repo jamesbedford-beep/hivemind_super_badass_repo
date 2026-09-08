@@ -9,7 +9,10 @@ Skips files whose .md is already newer than the source; deletes orphaned
 import sys
 from pathlib import Path
 
-from markitdown import MarkItDown
+try:
+    from markitdown import MarkItDown
+except ImportError:
+    sys.exit("markitdown is not installed. Run:  pip install markitdown[all]")
 
 CONVERT_EXTS = {".docx", ".pptx", ".xlsx", ".pdf"}
 

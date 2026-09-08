@@ -19,7 +19,7 @@ from pathlib import Path
 WIKI = Path(__file__).resolve().parent.parent
 VAULT = WIKI.parent
 DRIVE = VAULT / "drive"
-DRIVES = ["00_Operations", "01_Interventions", "02_External Affairs"]
+DRIVES = ["00_Ops", "01_Programmes", "02_External"]
 BIG = 300 * 1024
 
 SENSITIVE = [

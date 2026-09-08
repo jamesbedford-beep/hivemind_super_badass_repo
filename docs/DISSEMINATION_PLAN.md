@@ -32,7 +32,7 @@ The four-step export below. Produces a frozen, access-correct starter pack.
 In order of preference:
 
 1. **Drive membership** (covers ~90% of the corpus in three yes/no answers): is
-   the recipient a member of 00_Operations, 01_Interventions, 02_External Affairs?
+   the recipient a member of 00_Ops, 01_Programmes, 02_External?
    Check via each shared drive's "Manage members" in Drive, or just ask them.
    Shared-drive files inherit access from membership, so per-file auditing is
    mostly redundant.

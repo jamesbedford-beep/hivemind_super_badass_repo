@@ -14,7 +14,7 @@ from pathlib import Path
 
 WIKI = Path(__file__).resolve().parent.parent
 DRIVE = WIKI.parent / "drive"
-DRIVES = ["00_Operations", "01_Interventions", "02_External Affairs"]
+DRIVES = ["00_Ops", "01_Programmes", "02_External"]
 MAX_DOCS = int(sys.argv[1]) if len(sys.argv) > 1 else 12
 BIG = 300 * 1024
 

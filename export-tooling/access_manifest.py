@@ -1,10 +1,10 @@
-﻿"""Build the file manifest for a given teammate: which of THIS vault's source
+"""Build the file manifest for a given teammate: which of THIS vault's source
 documents they can access, and therefore which wiki notes an export would include.
 
 Two modes, use either or both:
 
   A. Shared-drive membership (no API, instant, covers shared-drive corpora):
-       --member-of "01_Interventions,02 External Affairs"
+       --member-of "01_Programmes,02 External"
      You get these three answers from Drive > each shared drive > Manage members.
 
   B. Live permission check via the Google Drive API (uses the rclone remote's
@@ -18,7 +18,7 @@ via --list), plus a coverage report of what it means for the wiki.
 
 Usage:
   python access_manifest.py --vault "...\\MyVault" --email teammate@example.org --remote gdrive
-  python access_manifest.py --vault "...\\MyVault" --member-of "01_Interventions"
+  python access_manifest.py --vault "...\\MyVault" --member-of "01_Programmes"
 """
 
 import argparse
